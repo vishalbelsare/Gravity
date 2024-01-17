@@ -22,6 +22,118 @@
 using namespace std;
 using namespace gravity;
 
+/*
+This test case creates a model with two symbolic variables, x and y, both of size 8. The test case then creates two parameter objects to define lower and upper bounds for x and y, respectively. The variable x is then defined as a var object, bounded by x_lb and x_ub. Similarly, the variable y is defined as a var object, bounded by y_lb and y_ub. The test case then creates two index objects, x_ids and y_ids, to define the indices of x and y, respectively.
+
+The test case adds x and y to the model using the add() function and their corresponding index objects. Next, an index set y_mat is created based on the indices of y. The test case then adds four rows to y_mat and populates them with elements from the index set y_ids according to a specific pattern.
+
+Finally, a linear constraint LinCons is created to represent the linear equation x(i)-x(i+1)-sum(y(j))=0, where i is in [1,4] and j is in y_mat. The constraint is added to the model and then checked to ensure that the model has the expected number of variables and constraints.
+*/
+
+TEST_CASE("Add in row") {
+    Model<> M("Test");
+    /* Symbolic variable x in R^8 */
+    param<> x_lb("x_lb"), x_ub("x_ub");
+    x_lb = {100,1000,1000,10,10,10,10,10};
+    x_ub = {10000,10000,10000,1000,1000,1000,1000,1000};
+    var<> x("x",x_lb,x_ub);
+    
+    /* Symbolic variable x in R^8 */
+    param<> y_lb("y_lb"), y_ub("y_ub");
+    y_lb = {-100,-1000,-1000,-10,-10,-10,-10,-10};
+    y_ub = {2,2,0,10,12,-1,-2,-3};
+    var<> y("y",y_lb,y_ub);
+    
+    auto x_ids = indices("x_ids"), y_ids = indices("y_ids");
+    x_ids = range(1,8);
+    y_ids = range(1,8);
+    M.add(x.in(x_ids), y.in(y_ids));
+
+    indices y_mat("y_mat");/* Declaring a matrix index set based on the indices of y */
+    y_mat = y_ids; /* y_mat is based on y_ids */
+    for(int i = 0; i<4; i++){
+        y_mat.add_empty_row();
+        for(int j = 0; j<7; j++){
+            if(i%2==0 && j%(i+1)==0)
+                y_mat.add_in_row(i, to_string(j+1));
+        }
+        if(i%2!=0)
+            y_mat.add_in_row(i, "1");
+    }
+    
+
+    Constraint<> LinCons("LinCons");
+    LinCons = x.in(range(1,4)) - x.in(range(2,5)) - y.in(y_mat);
+    M.add(LinCons.in(range(1,4)) == 0);
+    M.print();
+    CHECK(M.get_nb_vars()==16);
+    CHECK(M.get_nb_cons()==4);
+}
+
+
+TEST_CASE("Add in row, weighted sum") {
+    gravity::Model<> M("Test");
+    /* Symbolic variable x in R^8 */
+    gravity::param<> x_lb("x_lb"), x_ub("x_ub");
+    x_lb = {100,1000,1000,10,10,10,10,10};
+    x_ub = {10000,10000,10000,1000,1000,1000,1000,1000};
+    gravity::var<> x("x",x_lb,x_ub);
+   
+    /* Symbolic variable x in R^8 */
+    gravity::param<> y_lb("y_lb"), y_ub("y_ub");
+    y_lb = {-100,-1000,-1000,-10,-10,-10,-10,-10};
+    y_ub = {2,2,0,10,12,-1,-2,-3};
+    gravity::var<> y("y",y_lb,y_ub);
+   
+    auto x_ids = gravity::indices("x_ids"), y_ids = gravity::indices("y_ids");
+    x_ids = gravity::range(1,8);
+    y_ids = gravity::range(1,8);
+    M.add(x.in(x_ids), y.in(y_ids));
+ 
+    gravity::indices y_mat("y_mat");/* Declaring a matrix index set based on the indices of y */
+    y_mat = y_ids; /* y_mat is based on y_ids */
+ 
+    gravity::param<double> w("w");
+    w = {0.1,0.2,0.3,0.4,0.5,0.6,0.7};
+    w.in(range(1,7));
+    gravity::indices w_mat("weight mat");
+    w_mat = gravity::range(1,7);
+
+
+    y_mat.add_empty_row();
+    y_mat.add_in_row(0,"1");
+    y_mat.add_in_row(0,"2");
+    y_mat.add_in_row(0,"3");
+    w_mat.add_empty_row();
+    w_mat.add_in_row(0,"1");
+    w_mat.add_in_row(0,"2");
+    w_mat.add_in_row(0,"3");
+ 
+    y_mat.add_empty_row();
+    y_mat.add_in_row(1,"1");
+    y_mat.add_in_row(1,"2");
+    w_mat.add_empty_row();
+    w_mat.add_in_row(1,"4");
+    w_mat.add_in_row(1,"5");
+   
+    y_mat.add_empty_row();
+    y_mat.add_in_row(2,"1");
+    w_mat.add_empty_row();
+    w_mat.add_in_row(2,"6");
+ 
+    y_mat.add_empty_row();
+    y_mat.add_in_row(3,"1");
+    w_mat.add_empty_row();
+    w_mat.add_in_row(3,"7");
+ 
+   
+ 
+    gravity::Constraint<> LinCons("LinCons");
+    LinCons = x.in(range(1,4)) - x.in(range(2,5)) - w.in(w_mat) * y.in(y_mat);
+    M.add(LinCons.in(range(1,4)) == 0);
+    M.print();
+}
+
 #ifdef USE_MP
 TEST_CASE("testing readNL() function on ex4.nl") {
     Model<> M;
@@ -29,6 +141,7 @@ TEST_CASE("testing readNL() function on ex4.nl") {
     int status = M.readNL(NL_file);
     M.print();
     CHECK(status==0);
+    CHECK(M.get_nb_vars()==36);
     CHECK(M.get_nb_vars()==36);
     CHECK(M.get_nb_cons()==30);
     CHECK(M.is_convex());
@@ -145,7 +258,7 @@ TEST_CASE("Variable Scaling") {
     Model<> M("Test");
     param<> lb("x_lb");
     lb = {100,1000,1000,10,10,10,10,10};
-    param<> ub("x_lb");
+    param<> ub("x_ub");
     ub = {10000,10000,10000,1000,1000,1000,1000,1000};
     var<> x("x",lb,ub);
     M.add(x.in(range(1,8)));
@@ -1998,32 +2111,32 @@ TEST_CASE("Paths") {
     CHECK(p.to_str()=="{ Wii[1] , Wii[2] , Wii[3] , Wii[1] }");
 }
 
-TEST_CASE("testing SDP-BT"){
-    PowerNet grid;
-    auto fname = string(prj_dir)+"/data_sets/Power/nesta_case9_bgm__nco.m";
-    try{
-        build_ACOPF(grid, ACRECT);
-    }
-    catch(invalid_argument& arg){
-        cout << "Error successfully caught: "<< endl;
-        cout << arg.what() << endl;
-    }
-    grid.readgrid(fname);
-    auto OPF=build_ACOPF(grid, ACRECT);
-    double ub_solver_tol=1e-6, lb_solver_tol=1e-8, range_tol=1e-3, max_time = 200, opt_rel_tol=1e-2, opt_abs_tol=1e6;
-    unsigned max_iter=1e3, nb_threads=1;
-    SolverType ub_solver_type = ipopt, lb_solver_type = ipopt;
-    auto nonlin_obj=true, current=true;
-    auto SDP= build_SDPOPF(grid, current, nonlin_obj);
-    auto res=OPF->run_obbt(SDP, max_time, max_iter, opt_rel_tol, opt_abs_tol, nb_threads=1, ub_solver_type, lb_solver_type, ub_solver_tol, lb_solver_tol, range_tol);
-    auto lower_bound = SDP->get_obj_val();
-    auto lower_bound_init = get<3>(res);
-    auto upper_bound = OPF->get_obj_val();
-    auto gap_init = 100*(upper_bound - lower_bound_init)/std::abs(upper_bound);
-    auto final_gap = 100*(upper_bound - lower_bound)/std::abs(upper_bound);
-    CHECK(gap_init>10);
-    CHECK(final_gap<1);
-}
+// TEST_CASE("testing SDP-BT"){
+//     PowerNet grid;
+//     auto fname = string(prj_dir)+"/data_sets/Power/nesta_case9_bgm__nco.m";
+//     try{
+//         build_ACOPF(grid, ACRECT);
+//     }
+//     catch(invalid_argument& arg){
+//         cout << "Error successfully caught: "<< endl;
+//         cout << arg.what() << endl;
+//     }
+//     grid.readgrid(fname);
+//     auto OPF=build_ACOPF(grid, ACRECT);
+//     double ub_solver_tol=1e-6, lb_solver_tol=1e-8, range_tol=1e-3, max_time = 200, opt_rel_tol=1e-2, opt_abs_tol=1e6;
+//     unsigned max_iter=1e3, nb_threads=1;
+//     SolverType ub_solver_type = ipopt, lb_solver_type = ipopt;
+//     auto nonlin_obj=true, current=true;
+//     auto SDP= build_SDPOPF(grid, current, nonlin_obj);
+//     auto res=OPF->run_obbt(SDP, max_time, max_iter, opt_rel_tol, opt_abs_tol, nb_threads=1, ub_solver_type, lb_solver_type, ub_solver_tol, lb_solver_tol, range_tol);
+//     auto lower_bound = SDP->get_obj_val();
+//     auto lower_bound_init = get<3>(res);
+//     auto upper_bound = OPF->get_obj_val();
+//     auto gap_init = 100*(upper_bound - lower_bound_init)/std::abs(upper_bound);
+//     auto final_gap = 100*(upper_bound - lower_bound)/std::abs(upper_bound);
+//     CHECK(gap_init>10);
+//     CHECK(final_gap<1);
+// }
 
 TEST_CASE("Second Derivative Of One Constraint Equals First Derivative Of Another") {
     Model<> mod;

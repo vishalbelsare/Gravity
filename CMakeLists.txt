@@ -1,8 +1,10 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.16)
 
 project(Gravity)
 
 enable_testing()
+
+include(ExternalProject)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake)
 set(MACOSX_RPATH 1) 
@@ -12,15 +14,21 @@ option(Debug "Turn on debug mode" OFF)
 # Coverage
 option(Cov "Turn on coverage" OFF)
 
+# Find PcapPlusPlus (optional)
+option(PcapPlusPlus "Link to PcapPlusPlus libraries" OFF)
+
 # Find GUROBI (optional)
 option(Gurobi "Link to GUROBI libraries" OFF)
+
+# Find HiGHS (optional)
+option(HiGHS "Link to HiGHS libraries" OFF)
 
 # Find IPOPT (optional)
 option(Ipopt "Link to IPOPT libraries" ON)
 
-option(MP "Link to AMPL MP libraries" ON)
+option(MP "Link to AMPL MP libraries" OFF)
 
-option(CoinUtils "Link to CoinUtils libraries" ON)
+option(CoinUtils "Link to CoinUtils libraries" OFF)
 
 # Find XLNT (optional)
 option(Xlnt "Link to XLNT libraries" OFF)
@@ -61,6 +69,15 @@ if (OpenMPI)
 #   find_package(OpenMPI REQUIRED)
 #   include_directories(${OpenMPI_INCLUDE_DIRS})
 #   set(LIBS ${LIBS} ${OpenMPI_LIBRARIES})
+endif()
+
+
+if (PcapPlusPlus)
+    message(STATUS "Enable PcapPlusPlus")
+    add_definitions(-DUSE_PcapPlusPlus)
+    find_package(PcapPlusPlus REQUIRED)
+    include_directories(${PcapPlusPlus_INCLUDE_DIRS}/pcapplusplus)
+    set(LIBS ${LIBS} ${PcapPlusPlus_LIBRARIES})
 endif()
 
 
@@ -107,6 +124,8 @@ if (Gurobi)
     include_directories(${GUROBI_INCLUDE_DIRS})
     set(LIBS ${LIBS} ${GUROBI_LIBRARIES})
 endif()
+
+
 
 # Find CLP?
 if (Clp)
@@ -159,7 +178,7 @@ set_directory_properties(PROPERTIES EP_BASE ${CMAKE_BINARY_DIR}/third_party)
 get_directory_property(THIRDPARTY_BASE_PATH EP_BASE)
 
 set(THIRDPARTY_INSTALL_PATH ${THIRDPARTY_BASE_PATH})
-include(ExternalProject)
+
 
 if(NOT WIN32)
 #CoinUtils
@@ -200,6 +219,29 @@ else(MP_FOUND)
 endif()
 endif()
 
+# Find HiGHS?
+if (HiGHS)
+    message(STATUS "Enable HiGHS")
+    add_definitions(-DUSE_HiGHS)
+    find_package(HiGHS)
+if (HiGHS_FOUND)
+    message("-- Found HiGHS: ${HiGHS_INCLUDE_DIRS}")
+    include_directories(${HiGHS_INCLUDE_DIRS})
+    set(LIBS ${LIBS} ${HiGHS_LIBRARIES})
+else(HiGHS_FOUND)
+    set(ADD_HiGHS TRUE)
+    message(STATUS "Will download HiGHS library from https://github.com/ERGO-Code/HiGHS")
+    include(ExternalHiGHS)
+    if(APPLE)
+        set(HiGHS_LIBRARIES ${THIRDPARTY_INSTALL_PATH}/Install/HiGHS/build/lib/libhighs.dylib)
+        elseif(UNIX)
+            set(HiGHS_LIBRARIES ${THIRDPARTY_INSTALL_PATH}/Install/HiGHS/build/lib/libhighs.so)
+        elseif(WIN32)
+            set(HiGHS_LIBRARIES ${THIRDPARTY_INSTALL_PATH}/Install/HiGHS/build/lib/libhighs.lib)
+    endif(APPLE)
+endif(HiGHS_FOUND)
+endif(HiGHS)
+
 endif()
 if(Ipopt)
 # Add Ipopt include dir and link to libraries
@@ -227,7 +269,7 @@ set(ADD_IPOPT TRUE)
 if(APPLE)
  set(IPOPT_LIBRARIES ${THIRDPARTY_INSTALL_PATH}/Install/ipopt/build/lib/libipopt.dylib)
 elseif(UNIX)
- set(IPOPT_LIBRARIES ${THIRDPARTY_INSTALL_PATH}/Install/ipopt/build/lib/libipopt.so)
+	set(IPOPT_LIBRARIES ${PROJECT_SOURCE_DIR}/thirdparty/Ipopt/libipopt.so)
 elseif(WIN32) 
  set(IPOPT_LIBRARIES ${PROJECT_SOURCE_DIR}/thirdparty/Ipopt/libipopt-3.lib)
 endif(APPLE)
@@ -278,6 +320,7 @@ set(UNZIPPED ON CACHE BOOL "Already unzipped" FORCE)
 
 # Include Power dirs
 include_directories(${PROJECT_SOURCE_DIR}/examples/Optimization/NonLinear/Power)
+include_directories(${PROJECT_SOURCE_DIR}/examples/Optimization/Linear/Rostering)
 # include_directories(${PROJECT_SOURCE_DIR}/solvers)
 
 # Include ML dirs
@@ -315,7 +358,7 @@ if(UNIX)
   set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -pthread")
 endif()
 
-
+set(CMAKE_XCODE_ATTRIBUTE_LD_RUNPATH_SEARCH_PATHS "$ENV{DYLD_LIBRARY_PATH}")
 add_subdirectory(src)
 add_subdirectory(examples)
 # add_subdirectory(solvers)
